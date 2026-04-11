@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://navigator-consent.spec/schemas/regulation-info.schema.json",
+  "title": "RegulationInfo",
+  "description": "Regulation context returned by navigator.consent.getRegulations() and navigator.consent.setRegulations().",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "regulations",
+    "jurisdiction",
+    "source",
+    "browserDefault"
+  ],
+  "properties": {
+    "regulations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "jurisdiction": {
+      "type": ["string", "null"]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "browser",
+        "privacy_assistant",
+        "user"
+      ]
+    },
+    "browserDefault": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "regulations",
+            "jurisdiction"
+          ],
+          "properties": {
+            "regulations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "jurisdiction": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

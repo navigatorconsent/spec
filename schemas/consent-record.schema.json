@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://navigator-consent.spec/schemas/consent-record.schema.json",
+  "title": "ConsentAuditRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordId",
+    "timestamp",
+    "type"
+  ],
+  "properties": {
+    "recordId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "update",
+        "hide",
+        "show",
+        "withdraw",
+        "audit",
+        "init",
+        "regulation_change"
+      ]
+    },
+    "registrationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "cmp",
+        "privacy_assistant",
+        "browser",
+        "user"
+      ]
+    },
+    "topLevelOrigin": {
+      "type": "string"
+    },
+    "frameOrigin": {
+      "type": "string"
+    },
+    "scriptOrigin": {
+      "type": "string"
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vendors": {
+          "$ref": "preferences.schema.json#/$defs/decisionMap"
+        },
+        "purposes": {
+          "$ref": "preferences.schema.json#/$defs/decisionMap"
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

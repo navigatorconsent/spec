@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://navigator-consent.spec/schemas/cmp.schema.json",
+  "title": "InterfaceRegistration",
+  "description": "Declaration payload submitted via navigator.consent.registerInterface().",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "vendor",
+    "versionIdentifier"
+  ],
+  "properties": {
+    "vendor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt": {
+      "type": "string"
+    },
+    "regulation": {
+      "type": "string"
+    },
+    "jurisdiction": {
+      "type": "string"
+    },
+    "versionIdentifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cmpId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

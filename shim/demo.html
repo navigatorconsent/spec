@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>navigator.consent shim demo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 0;
+        padding: 1.5rem;
+        line-height: 1.4;
+      }
+      h1 {
+        margin-top: 0;
+      }
+      .layout {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        margin-bottom: 1rem;
+      }
+      section {
+        border: 1px solid #8883;
+        border-radius: 8px;
+        padding: 1rem;
+      }
+      button {
+        width: 100%;
+        text-align: left;
+        margin: 0.25rem 0;
+        padding: 0.5rem 0.75rem;
+      }
+      pre {
+        border: 1px solid #8883;
+        border-radius: 8px;
+        padding: 0.75rem;
+        overflow: auto;
+        max-height: 24rem;
+        margin: 0;
+      }
+      .small {
+        opacity: 0.8;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>`navigator.consent` shim demo</h1>
+    <p class="small">
+      This page simulates both CMP calls (DOM context) and Privacy Assistant calls (extension context flag).
+    </p>
+
+    <div class="layout">
+      <section>
+        <h2>CMP side</h2>
+        <button id="register-interface">registerInterface()</button>
+        <button id="register-vendors">registerVendors()</button>
+        <button id="register-purposes">registerPurposes()</button>
+        <button id="request-consent">requestConsent()</button>
+        <button id="cmp-update">updatePreferences() from CMP</button>
+        <button id="withdraw">withdraw()</button>
+      </section>
+
+      <section>
+        <h2>Privacy Assistant side</h2>
+        <button id="init">init()</button>
+        <button id="get-vendors">getVendors()</button>
+        <button id="get-purposes">getPurposes()</button>
+        <button id="assistant-update">updatePreferences() from assistant</button>
+        <button id="hide">hide()</button>
+        <button id="show">show()</button>
+        <button id="assistant-withdraw">withdraw()</button>
+        <button id="audit">audit()</button>
+      </section>
+    </div>
+
+    <section>
+      <h2>Output</h2>
+      <pre id="output"></pre>
+    </section>
+
+    <script src="./navigator-consent-shim.js"></script>
+    <script>
+      (function () {
+        var output = document.getElementById("output");
+        var registrationId = null;
+
+        function log(label, payload) {
+          var line = "[" + new Date().toISOString() + "] " + label;
+          if (payload !== undefined) {
+            line += "\n" + JSON.stringify(payload, null, 2);
+          }
+          output.textContent = line + "\n\n" + output.textContent;
+        }
+
+        function asAssistant(callable) {
+          window.__navigatorConsentExtensionContext = true;
+          return Promise.resolve()
+            .then(callable)
+            .finally(function () {
+              window.__navigatorConsentExtensionContext = false;
+            });
+        }
+
+        ["update", "hide", "show", "withdraw", "audit", "init"].forEach(function (type) {
+          navigator.consent.addEventListener(type, function (event) {
+            log("event:" + type, event);
+          });
+        });
+
+        document.getElementById("register-interface").addEventListener("click", function () {
+          navigator.consent
+            .registerInterface({
+              vendor: "Axeptio Demo CMP",
+              prompt: "Allow analytics and personalization?",
+              legalBasis: ["consent"],
+              regulation: "gdpr",
+              jurisdiction: "eu",
+              versionIdentifier: "demo-v1",
+              cmpId: "axeptio-demo"
+            })
+            .then(function (result) {
+              registrationId = result.registrationId;
+              log("registerInterface()", result);
+            })
+            .catch(function (error) {
+              log("registerInterface() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("register-vendors").addEventListener("click", function () {
+          navigator.consent
+            .registerVendors(
+              [
+                { id: "vendor_analytics", name: "Analytics Vendor" },
+                { id: "vendor_ads", name: "Advertising Vendor" }
+              ],
+              { registrationId: registrationId }
+            )
+            .then(function (result) {
+              log("registerVendors()", result);
+            })
+            .catch(function (error) {
+              log("registerVendors() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("register-purposes").addEventListener("click", function () {
+          navigator.consent
+            .registerPurposes(
+              [
+                { id: "purpose_analytics", name: "Analytics" },
+                { id: "purpose_personalization", name: "Personalization" }
+              ],
+              { registrationId: registrationId }
+            )
+            .then(function (result) {
+              log("registerPurposes()", result);
+            })
+            .catch(function (error) {
+              log("registerPurposes() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("request-consent").addEventListener("click", function () {
+          navigator.consent
+            .requestConsent({
+              registrationId: registrationId,
+              purposeIds: ["purpose_analytics"],
+              reason: "Video embed"
+            })
+            .then(function (snapshot) {
+              log("requestConsent()", snapshot);
+            })
+            .catch(function (error) {
+              log("requestConsent() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("cmp-update").addEventListener("click", function () {
+          navigator.consent
+            .updatePreferences({
+              registrationId: registrationId,
+              source: "cmp",
+              vendors: {
+                vendor_analytics: "grant"
+              },
+              purposes: {
+                purpose_analytics: "grant"
+              },
+              reason: "CMP-side acceptance"
+            })
+            .then(function (snapshot) {
+              log("updatePreferences() from CMP", snapshot);
+            })
+            .catch(function (error) {
+              log("cmp update error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("withdraw").addEventListener("click", function () {
+          navigator.consent
+            .withdraw({
+              registrationId: registrationId,
+              reason: "User changed mind"
+            })
+            .then(function (snapshot) {
+              log("withdraw() from CMP", snapshot);
+            })
+            .catch(function (error) {
+              log("withdraw() from CMP error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("init").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.init({
+              assistantId: "demo-assistant",
+              version: "1.0.0",
+              displayName: "Demo Assistant"
+            });
+          })
+            .then(function () {
+              log("init()", { ok: true });
+            })
+            .catch(function (error) {
+              log("init() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("get-vendors").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.getVendors({ registrationId: registrationId });
+          })
+            .then(function (vendors) {
+              log("getVendors()", vendors);
+            })
+            .catch(function (error) {
+              log("getVendors() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("get-purposes").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.getPurposes({ registrationId: registrationId });
+          })
+            .then(function (purposes) {
+              log("getPurposes()", purposes);
+            })
+            .catch(function (error) {
+              log("getPurposes() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("assistant-update").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.updatePreferences({
+              registrationId: registrationId,
+              source: "privacy_assistant",
+              vendors: {
+                vendor_ads: "deny"
+              },
+              purposes: {
+                purpose_personalization: "deny"
+              },
+              reason: "Assistant-side policy"
+            });
+          })
+            .then(function (snapshot) {
+              log("updatePreferences() from assistant", snapshot);
+            })
+            .catch(function (error) {
+              log("assistant update error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("hide").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.hide({ registrationId: registrationId, reason: "Clean browsing mode" });
+          })
+            .then(function () {
+              log("hide()", { ok: true });
+            })
+            .catch(function (error) {
+              log("hide() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("show").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.show({ registrationId: registrationId, reason: "User requested settings" });
+          })
+            .then(function () {
+              log("show()", { ok: true });
+            })
+            .catch(function (error) {
+              log("show() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("assistant-withdraw").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.withdraw({ registrationId: registrationId, reason: "Assistant withdraw all" });
+          })
+            .then(function (snapshot) {
+              log("withdraw() from assistant", snapshot);
+            })
+            .catch(function (error) {
+              log("withdraw() from assistant error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("audit").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.audit({ registrationId: registrationId, limit: 100 });
+          })
+            .then(function (records) {
+              log("audit()", records);
+            })
+            .catch(function (error) {
+              log("audit() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        log("Demo ready", { note: "Start with registerInterface()" });
+      })();
+    </script>
+  </body>
+</html>

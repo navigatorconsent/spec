@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://navigator-consent.spec/schemas/preferences.schema.json",
+  "title": "PreferenceUpdate",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "registrationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "vendors": {
+      "$ref": "#/$defs/decisionMap"
+    },
+    "purposes": {
+      "$ref": "#/$defs/decisionMap"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "cmp",
+        "privacy_assistant",
+        "user"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "vendors"
+      ]
+    },
+    {
+      "required": [
+        "purposes"
+      ]
+    }
+  ],
+  "$defs": {
+    "consentDecision": {
+      "type": "string",
+      "enum": [
+        "grant",
+        "deny",
+        "unset"
+      ]
+    },
+    "decisionMap": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/consentDecision"
+      }
+    }
+  }
+}

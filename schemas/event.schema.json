@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://navigator-consent.spec/schemas/event.schema.json",
+  "title": "ConsentEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "timestamp"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "update",
+        "hide",
+        "show",
+        "withdraw",
+        "audit",
+        "init",
+        "regulation_change",
+        "consent_request"
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "registrationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "cmp",
+        "privacy_assistant",
+        "browser",
+        "user"
+      ]
+    },
+    "payload": {}
+  }
+}

@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TCF Adapter — navigator.consent</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --accent: #2563eb;
+        --border: #8883;
+        --bg-code: #f5f5f5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg-code: #1e1e1e; }
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        margin: 0;
+        padding: 1.5rem;
+        line-height: 1.5;
+        max-width: 52rem;
+      }
+      h1 { margin-top: 0; }
+      h2 { margin-top: 2rem; }
+      section {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+      }
+      section h2 { margin-top: 0; }
+      pre, code {
+        font-family: "SF Mono", "Fira Code", Consolas, monospace;
+        font-size: 0.875rem;
+      }
+      pre {
+        background: var(--bg-code);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        overflow: auto;
+        max-height: 28rem;
+        margin: 0.75rem 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      ol { padding-left: 1.25rem; }
+      ol li { margin-bottom: 0.5rem; }
+      button {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        margin: 0.25rem 0.25rem 0.25rem 0;
+        font-size: 0.875rem;
+      }
+      button:hover { opacity: 0.85; }
+      .tag {
+        display: inline-block;
+        font-size: 0.75rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 4px;
+        font-weight: 600;
+        vertical-align: middle;
+      }
+      .tag-tcf { background: #dbeafe; color: #1e40af; }
+      .tag-api { background: #dcfce7; color: #166534; }
+      .small { opacity: 0.7; font-size: 0.875rem; }
+      .timing-diagram {
+        font-family: "SF Mono", "Fira Code", Consolas, monospace;
+        font-size: 0.8rem;
+        line-height: 1.6;
+      }
+      @media (prefers-color-scheme: dark) {
+        .tag-tcf { background: #1e3a5f; color: #93c5fd; }
+        .tag-api { background: #14532d; color: #86efac; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TCF &rarr; <code>navigator.consent</code> adapter</h1>
+    <p class="small">
+      A proof-of-concept bridge between the IAB TCF v2.x CMP API and
+      <code>navigator.consent</code>. One script, zero configuration.
+    </p>
+
+    <!-- ── What this is ──────────────────────────────────────── -->
+
+    <section>
+      <h2>What is this?</h2>
+      <p>
+        The TCF adapter is a single self-executing script (~3 KB minified)
+        that transparently connects any IAB TCF v2.x compliant CMP to
+        <code>navigator.consent</code>. It listens for TCF lifecycle events
+        through the standard <code>__tcfapi('addEventListener')</code> API
+        and registers purposes, vendors, and consent decisions with
+        <code>navigator.consent</code>. No configuration required. No public
+        API exposed. The CMP does not need to know the adapter exists.
+      </p>
+    </section>
+
+    <!-- ── How it works ──────────────────────────────────────── -->
+
+    <section>
+      <h2>How it works</h2>
+      <ol>
+        <li>
+          <strong>Polls</strong> for both <code>__tcfapi</code> and
+          <code>navigator.consent</code> (100 ms interval, 10 s timeout).
+          If either is missing, the adapter silently exits.
+        </li>
+        <li>
+          <strong>Subscribes</strong> to TCF events via
+          <code>__tcfapi('addEventListener', 2, callback)</code>.
+        </li>
+        <li>
+          On the <strong>first meaningful event</strong>
+          (<code>tcloaded</code>, <code>cmpuishown</code>, or
+          <code>useractioncomplete</code>):
+          <ul>
+            <li>Fetches the Global Vendor List via <code>getVendorList</code> (best-effort).</li>
+            <li>Calls <code>registerInterface()</code> with CMP identity from TCData.</li>
+            <li>Calls <code>registerPurposes()</code> with the 11 standard TCF purposes (consent and legitimate interest variants), plus special features.</li>
+            <li>Calls <code>registerVendors()</code> with vendor entries enriched from the GVL (names, privacy URLs, purpose mappings).</li>
+            <li>Calls <code>updatePreferences()</code> with the current consent state.</li>
+            <li>Calls <code>requestConsent()</code> to signal that a consent flow is active.</li>
+          </ul>
+        </li>
+        <li>
+          On <strong>subsequent events</strong>
+          (<code>useractioncomplete</code>): calls
+          <code>updatePreferences()</code> with the updated consent state.
+        </li>
+      </ol>
+    </section>
+
+    <!-- ── Timing ────────────────────────────────────────────── -->
+
+    <section>
+      <h2>Timing</h2>
+      <pre class="timing-diagram">T0  CMP stub loads              window.__tcfapi = queuing function
+T1  Adapter loads               polls for __tcfapi + navigator.consent
+T2  Both found                  adapter calls addEventListener
+T3  First event (tcloaded       adapter registers + syncs + requestConsent()
+    or cmpuishown)
+T4  useractioncomplete          adapter syncs updated consent</pre>
+      <p class="small">
+        The adapter never blocks the CMP. All <code>navigator.consent</code>
+        calls are asynchronous fire-and-forget.
+      </p>
+    </section>
+
+    <!-- ── Size and performance ──────────────────────────────── -->
+
+    <section>
+      <h2>Size and performance</h2>
+      <p>
+        The adapter is approximately <strong>3 KB minified</strong> (under
+        1.5 KB gzipped). It makes zero network requests on its own and adds
+        no runtime overhead beyond the initial registration. After the first
+        TCF event is processed, the adapter is dormant, only waking when
+        the CMP fires <code>useractioncomplete</code>.
+      </p>
+    </section>
+
+    <!-- ── Live example ──────────────────────────────────────── -->
+
+    <section>
+      <h2>Live example</h2>
+      <p class="small">
+        This page includes a mock <code>__tcfapi</code> that simulates a TCF
+        CMP lifecycle. The adapter auto-detects it and registers everything
+        with <code>navigator.consent</code>. Watch the log below.
+      </p>
+      <div>
+        <button id="simulate-action">Simulate user consent change</button>
+        <button id="simulate-reject">Simulate user reject all</button>
+      </div>
+      <pre id="output"></pre>
+    </section>
+
+    <!-- ── Why this matters ──────────────────────────────────── -->
+
+    <section>
+      <h2>Why this matters</h2>
+      <p>
+        Privacy assistants (browser extensions that manage consent on behalf
+        of the user) currently need CMP-specific integrations for every
+        consent framework. With this adapter, any TCF-compliant CMP becomes
+        automatically accessible through <code>navigator.consent</code>.
+        Privacy assistants can read the purpose catalog, inspect vendor
+        lists, and apply user preferences through a single, standard API.
+      </p>
+      <p>
+        For CMPs, this requires zero integration effort. Drop the adapter
+        script on the page (or let the browser/extension inject it), and the
+        existing TCF implementation is bridged automatically.
+      </p>
+    </section>
+
+    <!-- ── Scripts ───────────────────────────────────────────── -->
+
+    <!-- 1. Mock __tcfapi (simulates a TCF CMP) -->
+    <script>
+      var mockTcf = (function () {
+        var listeners = [];
+        var listenerCounter = 0;
+
+        // Mock Global Vendor List
+        var vendorList = {
+          gvlSpecificationVersion: 3,
+          vendorListVersion: 42,
+          purposes: {
+            1: { id: 1, name: "Store and/or access information on a device" },
+            2: { id: 2, name: "Use limited data to select advertising" },
+            3: { id: 3, name: "Create profiles for personalised advertising" },
+            7: { id: 7, name: "Measure advertising performance" },
+            8: { id: 8, name: "Measure content performance" },
+            10: { id: 10, name: "Develop and improve services" }
+          },
+          vendors: {
+            42: {
+              name: "Example Analytics Co.",
+              policyUrl: "https://analytics.example.com/privacy",
+              purposes: [1, 7, 8],
+              legIntPurposes: [],
+              specialFeatures: []
+            },
+            101: {
+              name: "Example Ads Inc.",
+              policyUrl: "https://ads.example.com/privacy",
+              purposes: [2, 3],
+              legIntPurposes: [],
+              specialFeatures: [1]
+            },
+            200: {
+              name: "Example CDN Ltd.",
+              policyUrl: "https://cdn.example.com/privacy",
+              purposes: [1],
+              legIntPurposes: [10],
+              specialFeatures: []
+            }
+          }
+        };
+
+        // Initial consent state: partial consent
+        var baseTcData = {
+          cmpId: 42,
+          cmpVersion: 2,
+          tcfPolicyVersion: 4,
+          gdprApplies: true,
+          purpose: {
+            consents: { 1: true, 2: false, 3: false, 7: true, 8: true },
+            legitimateInterests: { 10: true }
+          },
+          vendor: {
+            consents: { 42: true, 101: false, 200: true },
+            legitimateInterests: { 200: true }
+          },
+          specialFeatureOptins: { 1: false }
+        };
+
+        window.__tcfapi = function (command, version, callback) {
+          if (command === "addEventListener") {
+            listenerCounter++;
+            listeners.push({ id: listenerCounter, cb: callback });
+          } else if (command === "getVendorList") {
+            setTimeout(function () { callback(vendorList, true); }, 10);
+          }
+        };
+
+        return {
+          fire: function (overrides) {
+            var tcData = JSON.parse(JSON.stringify(baseTcData));
+            if (overrides) {
+              Object.keys(overrides).forEach(function (k) {
+                if (typeof overrides[k] === "object" && overrides[k] !== null && typeof tcData[k] === "object" && tcData[k] !== null) {
+                  Object.keys(overrides[k]).forEach(function (sk) {
+                    if (typeof overrides[k][sk] === "object" && overrides[k][sk] !== null && typeof tcData[k][sk] === "object" && tcData[k][sk] !== null) {
+                      Object.keys(overrides[k][sk]).forEach(function (vk) {
+                        tcData[k][sk][vk] = overrides[k][sk][vk];
+                      });
+                    } else {
+                      tcData[k][sk] = overrides[k][sk];
+                    }
+                  });
+                } else {
+                  tcData[k] = overrides[k];
+                }
+              });
+            }
+            tcData.listenerId = 1;
+            listeners.forEach(function (l) { l.cb(tcData, true); });
+          },
+          updateBase: function (overrides) {
+            if (overrides.purpose) {
+              if (overrides.purpose.consents) {
+                Object.keys(overrides.purpose.consents).forEach(function (k) {
+                  baseTcData.purpose.consents[k] = overrides.purpose.consents[k];
+                });
+              }
+            }
+            if (overrides.vendor) {
+              if (overrides.vendor.consents) {
+                Object.keys(overrides.vendor.consents).forEach(function (k) {
+                  baseTcData.vendor.consents[k] = overrides.vendor.consents[k];
+                });
+              }
+            }
+            if (overrides.specialFeatureOptins) {
+              Object.keys(overrides.specialFeatureOptins).forEach(function (k) {
+                baseTcData.specialFeatureOptins[k] = overrides.specialFeatureOptins[k];
+              });
+            }
+          }
+        };
+      })();
+    </script>
+
+    <!-- 2. navigator.consent shim -->
+    <script src="./navigator-consent-shim.js"></script>
+
+    <!-- 3. Logging + event listeners (before adapter so we catch everything) -->
+    <script>
+      (function () {
+        var output = document.getElementById("output");
+        var lineCount = 0;
+
+        function log(tag, label, detail) {
+          lineCount++;
+          var prefix = "[" + lineCount + "] ";
+          var tagStr = tag === "tcf" ? "[TCF]" : "[API]";
+          var line = prefix + tagStr + " " + label;
+          if (detail !== undefined) {
+            line += "\n     " + JSON.stringify(detail, null, 2).replace(/\n/g, "\n     ");
+          }
+          output.textContent = line + "\n\n" + output.textContent;
+        }
+
+        // Wrap navigator.consent methods to log calls
+        var consent = navigator.consent;
+        var origRegisterInterface = consent.registerInterface.bind(consent);
+        var origRegisterPurposes = consent.registerPurposes.bind(consent);
+        var origRegisterVendors = consent.registerVendors.bind(consent);
+        var origUpdatePreferences = consent.updatePreferences.bind(consent);
+        var origRequestConsent = consent.requestConsent.bind(consent);
+
+        consent.registerInterface = function (opts) {
+          log("api", "registerInterface()", { vendor: opts.vendor, cmpId: opts.cmpId });
+          return origRegisterInterface(opts).then(function (r) {
+            log("api", "registerInterface() OK", { registrationId: r.registrationId });
+            return r;
+          });
+        };
+
+        consent.registerPurposes = function (purposes, opts) {
+          log("api", "registerPurposes()", { count: purposes.length, ids: purposes.map(function (p) { return p.id; }) });
+          return origRegisterPurposes(purposes, opts);
+        };
+
+        consent.registerVendors = function (vendors, opts) {
+          log("api", "registerVendors()", { count: vendors.length, ids: vendors.map(function (v) { return v.id; }) });
+          return origRegisterVendors(vendors, opts);
+        };
+
+        consent.updatePreferences = function (opts) {
+          var summary = {};
+          if (opts.purposes) summary.purposes = opts.purposes;
+          if (opts.vendors) summary.vendors = opts.vendors;
+          log("api", "updatePreferences()", summary);
+          return origUpdatePreferences(opts);
+        };
+
+        consent.requestConsent = function (opts) {
+          log("api", "requestConsent()", { purposeCount: opts.purposeIds ? opts.purposeIds.length : 0 });
+          return origRequestConsent(opts);
+        };
+
+        // Listen to navigator.consent events
+        ["update", "consent_request"].forEach(function (type) {
+          consent.addEventListener(type, function () {
+            log("api", "event: " + type);
+          });
+        });
+
+        // Simulate buttons
+        document.getElementById("simulate-action").addEventListener("click", function () {
+          log("tcf", "User accepted more purposes (simulated useractioncomplete)");
+          mockTcf.updateBase({
+            purpose: { consents: { 2: true, 3: true } },
+            vendor: { consents: { 101: true } },
+            specialFeatureOptins: { 1: true }
+          });
+          mockTcf.fire({ eventStatus: "useractioncomplete" });
+        });
+
+        document.getElementById("simulate-reject").addEventListener("click", function () {
+          log("tcf", "User rejected all (simulated useractioncomplete)");
+          mockTcf.updateBase({
+            purpose: { consents: { 1: false, 2: false, 3: false, 7: false, 8: false } },
+            vendor: { consents: { 42: false, 101: false, 200: false } },
+            specialFeatureOptins: { 1: false }
+          });
+          mockTcf.fire({ eventStatus: "useractioncomplete" });
+        });
+
+        // Fire initial tcloaded after a short delay (simulating CMP initialization)
+        log("tcf", "Mock CMP stub created (window.__tcfapi available)");
+        setTimeout(function () {
+          log("tcf", "CMP initialized, firing 'tcloaded' event");
+          mockTcf.fire({ eventStatus: "tcloaded" });
+        }, 600);
+      })();
+    </script>
+
+    <!-- 4. The adapter (auto-initializes) -->
+    <script src="./navigator-consent-tcf-adapter.js"></script>
+  </body>
+</html>
