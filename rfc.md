@@ -9,7 +9,7 @@ This Request for Comments (RFC) proposes a browser-level API, `navigator.consent
 - **Status**: Draft for public technical review.
 - **Audience**: Browser vendors, CMP providers, privacy-assistant developers, regulators, and standards bodies.
 - **Normative language**: The keywords **MUST**, **MUST NOT**, **SHOULD**, and **MAY** in this document are to be interpreted as described in RFC 2119.
-- **Draft-stage governance**: this draft uses light governance; the human repo owner has final decision authority, no fixed review window is required, and unresolved objections are tracked in `discussion.md` before final owner decision.
+- **Draft-stage governance**: this draft uses light governance; the human repo owner has final decision authority, no fixed review window is required, and unresolved objections are tracked in `decisions.md` before final owner decision.
 
 ## 2. Scope
 

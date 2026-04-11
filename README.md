@@ -22,7 +22,8 @@ CMPs retain full responsibility for compliance, transparency, and consent storag
 
 ```
 rfc.md                             Core specification
-discussion.md                     Design decisions and open topics
+decisions.md                      Index of individual decision records
+decisions/                        One file per decision (d-001.md … d-031.md)
 notice.md                         Human + LLM collaboration process
 digital-omnibus-position-paper.md EU Digital Omnibus policy position
 
@@ -49,7 +50,7 @@ schemas/
 
 **Try the demo**: Open `shim/demo.html` in a browser. It loads the polyfill and lets you walk through CMP registration, vendor/purpose declaration, and preference updates interactively.
 
-**Review design decisions**: `discussion.md` tracks all resolved and open design topics with rationale.
+**Review design decisions**: `decisions.md` is a scannable index of all resolved and open design topics. Each entry links to a standalone file in `decisions/` with the full rationale.
 
 ## Documentation site
 
@@ -67,4 +68,4 @@ The companion documentation website lives in a separate repository: [navigatorco
 
 ## How to contribute
 
-This is an exploratory draft. Feedback is welcome on the API surface, security model, and interoperability considerations. See `discussion.md` for the current list of open and resolved design topics.
+This is an exploratory draft. Feedback is welcome on the API surface, security model, and interoperability considerations. See `decisions.md` for the current list of open and resolved design topics.
