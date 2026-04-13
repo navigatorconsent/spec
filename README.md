@@ -58,13 +58,15 @@ The companion documentation website lives in a separate repository: [navigatorco
 
 ## Key concepts
 
-| Term | Meaning |
-|------|---------|
-| CMP | Consent Management Platform — presents consent UI, stores evidence, signals downstream |
-| Privacy Assistant | Browser extension that reads consent metadata and applies user preferences |
-| DOM context | Page scripts and CMP scripts — can register interfaces but cannot read metadata |
-| Extension context | Browser extension scripts — can read metadata and apply preferences but cannot register |
-| Provenance | Runtime-derived attribution (`user`, `cmp`, `privacy_assistant`) used for conflict resolution |
+
+| Term              | Meaning                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| CMP               | Consent Management Platform — presents consent UI, stores evidence, signals downstream        |
+| Privacy Assistant | Browser extension that reads consent metadata and applies user preferences                    |
+| DOM context       | Page scripts and CMP scripts — can register interfaces but cannot read metadata               |
+| Extension context | Browser extension scripts — can read metadata and apply preferences but cannot register       |
+| Provenance        | Runtime-derived attribution (`user`, `cmp`, `privacy_assistant`) used for conflict resolution |
+
 
 ## How to contribute
 
