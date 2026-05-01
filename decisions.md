@@ -9,6 +9,8 @@ Resolved and open design decisions for the `navigator.consent` API.
 - [D-003 What requestConsent returns (signal vs finalized decision)](decisions/d-003.md) — decided
 - [D-004 Single withdraw method naming](decisions/d-004.md) — decided
 - [D-005 How vendor and purpose lists aggregate across registrations](decisions/d-005.md) — open
+- [D-032 Assistant self-registration replaces init()](decisions/d-032.md) — decided
+- [D-035 registerInterface return surfaces presence and freshness](decisions/d-035.md) — decided
 
 ## B. Scope and storage boundaries
 
@@ -25,6 +27,7 @@ Resolved and open design decisions for the `navigator.consent` API.
 - [D-013 Rate limits and quotas for open registration](decisions/d-013.md) — decided
 - [D-014 Minimum DevTools panel features](decisions/d-014.md) — open
 - [D-015 Warning event type (dedicated vs audit payload)](decisions/d-015.md) — open
+- [D-033 Rename audit() to getHistory() and add listRegistrations()](decisions/d-033.md) — decided
 
 ## D. Data model and schemas
 
@@ -34,6 +37,7 @@ Resolved and open design decisions for the `navigator.consent` API.
 - [D-019 How breaking schema changes are announced](decisions/d-019.md) — decided
 - [D-027 Whether vendors declare which purposes they serve](decisions/d-027.md) — decided
 - [D-028 Legal basis on purpose vs registration level](decisions/d-028.md) — decided
+- [D-034 Structured cmp metadata and opaque catalog checksum](decisions/d-034.md) — decided
 
 ## E. Assistant UX and safety
 
