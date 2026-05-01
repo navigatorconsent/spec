@@ -82,7 +82,7 @@ This RFC is technical and neutral. It is designed to remain useful across jurisd
 | Method group | DOM context | Extension context |
 | --- | --- | --- |
 | `registerInterface`, `registerVendors`, `registerPurposes`, `requestConsent` | MUST be allowed | MUST be rejected |
-| `getVendors`, `getPurposes`, `hide`, `show`, `audit`, `init` | MUST be rejected | MUST be allowed |
+| `getVendors`, `getPurposes`, `hide`, `show`, `audit`, `registerAssistant` | MUST be rejected | MUST be allowed |
 | `getRegulations` | MUST be allowed | MUST be allowed |
 | `setRegulations` | MUST be rejected | MUST be allowed |
 | `updatePreferences`, `withdraw`, `addEventListener`, `removeEventListener` | MUST be allowed | MUST be allowed |
@@ -138,7 +138,7 @@ If the feature is unavailable, callers MUST treat `navigator.consent` as absent 
 
 ```ts
 type ConsentDecision = "grant" | "deny" | "unset";
-type ConsentEventType = "update" | "hide" | "show" | "withdraw" | "audit" | "init" | "regulation_change" | "consent_request";
+type ConsentEventType = "update" | "hide" | "show" | "withdraw" | "audit" | "registerassistant" | "regulation_change" | "consent_request";
 type LegalBasis = "consent" | "legitimate_interest";
 
 interface InterfaceRegistration {
@@ -422,20 +422,32 @@ Behavior:
 
 - Returns consent audit records available in the current context and permissions.
 
-#### 6.5.8 `navigator.consent.init()`
+#### 6.5.8 `navigator.consent.registerAssistant()`
 
 ```ts
-init(metadata?: {
-  assistantId?: string;
-  version?: string;
+registerAssistant(metadata: {
+  vendor: string;
+  version: string;
   displayName?: string;
-}): Promise<void>
+  frameworks?: string[];
+}): Promise<{ assistantId: string }>
 ```
 
 Behavior:
 
-- Signals that a Privacy Assistant is active.
-- Browser MUST dispatch `init`.
+- Registers a Privacy Assistant for the current page context. The browser mints an `assistantId` and returns it.
+- `assistantId` is the stable handle the browser uses for assistant-attributed provenance, history filtering, and future coordination methods.
+- `metadata.vendor` is the extension publisher (required) and parallels the CMP `vendor` field on `InterfaceRegistration`.
+- `metadata.version` is the assistant's own version (required).
+- `metadata.frameworks` MAY declare which compliance frameworks the assistant supports (for example `tcf-v2.2`, `gpc`).
+- Re-registration by the same extension MAY update metadata and SHOULD preserve the existing `assistantId` for continuity.
+- Browser MUST dispatch a `registerassistant` event.
+- Browser MUST append a history entry of type `registerassistant` for each call.
+- There is no inverse method. Browser detects extension teardown and updates assistant presence accounting accordingly.
+
+Errors:
+
+- `ValidationError`
 
 ### 6.6 Event API
 
@@ -463,7 +475,7 @@ interface ConsentEvent {
 
 For a single registration:
 
-1. `init` (if emitted) MUST precede assistant-driven updates.
+1. `registerassistant` (if emitted) MUST precede assistant-driven updates.
 2. `update` MUST be emitted after a successful preference write.
 3. `withdraw` MUST be emitted after successful withdrawal.
 4. `hide` and `show` events MUST preserve invocation order.
@@ -707,7 +719,7 @@ sequenceDiagram
     cmp->>browser: registerInterface()
     cmp->>browser: registerVendors()
     cmp->>browser: registerPurposes()
-    pas->>browser: init()
+    pas->>browser: registerAssistant()
     pas->>browser: getVendors(), getPurposes()
     pas->>browser: updatePreferences()
     browser->>cmp: dispatch update
