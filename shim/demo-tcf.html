@@ -347,7 +347,7 @@ T4  useractioncomplete          adapter syncs updated consent</pre>
         var origRequestConsent = consent.requestConsent.bind(consent);
 
         consent.registerInterface = function (opts) {
-          log("api", "registerInterface()", { vendor: opts.vendor, cmpId: opts.cmpId });
+          log("api", "registerInterface()", { vendor: opts.vendor, cmp: opts.cmp });
           return origRegisterInterface(opts).then(function (r) {
             log("api", "registerInterface() OK", { registrationId: r.registrationId });
             return r;

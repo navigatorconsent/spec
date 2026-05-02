@@ -1,14 +1,39 @@
 export type ConsentDecision = "grant" | "deny" | "unset";
-export type ConsentEventType = "update" | "hide" | "show" | "withdraw" | "audit" | "init" | "regulation_change" | "consent_request";
+export type ConsentEventType = "update" | "hide" | "show" | "withdraw" | "query" | "registerassistant" | "regulation_change" | "consent_request";
 export type LegalBasis = "consent" | "legitimate_interest";
+
+export interface CmpMetadata {
+  id?: string;
+  version: string;
+  sdkVersion?: string;
+  configVersion?: string;
+  language?: string;
+  displayName?: string;
+  frameworks?: string[];
+}
 
 export interface InterfaceRegistration {
   vendor: string;
   prompt?: string;
   regulation?: string;
   jurisdiction?: string;
-  versionIdentifier: string;
-  cmpId?: string;
+  cmp: CmpMetadata;
+  catalogChecksum?: string;
+}
+
+export interface AssistantMetadata {
+  vendor: string;
+  version: string;
+  displayName?: string;
+  frameworks?: string[];
+}
+
+export interface RegisterInterfaceResult {
+  registrationId: string;
+  storedCatalogChecksum: string | null;
+  assistantStatus: "absent" | "present";
+  regulations: string[];
+  jurisdiction: string | null;
 }
 
 export interface Vendor {
@@ -65,7 +90,7 @@ export interface ConsentEvent {
   payload?: unknown;
 }
 
-export interface ConsentAuditRecord {
+export interface ConsentHistoryEntry {
   recordId: string;
   timestamp: string;
   type: ConsentEventType;
@@ -90,7 +115,7 @@ export interface ConsentAuditRecord {
 }
 
 export interface NavigatorConsent {
-  registerInterface(payload: InterfaceRegistration): Promise<{ registrationId: string }>;
+  registerInterface(payload: InterfaceRegistration): Promise<RegisterInterfaceResult>;
   registerVendors(vendors: Array<Vendor | string>, options?: { registrationId?: string }): Promise<{ count: number }>;
   registerPurposes(
     purposes: Array<Purpose | string>,
@@ -114,13 +139,17 @@ export interface NavigatorConsent {
   getPurposes(filter?: { registrationId?: string; domain?: string }): Promise<Purpose[]>;
   hide(target?: { registrationId?: string; reason?: string }): Promise<void>;
   show(target?: { registrationId?: string; reason?: string }): Promise<void>;
-  audit(query?: {
+  getHistory(query?: {
     registrationId?: string;
     from?: string;
     to?: string;
     limit?: number;
-  }): Promise<ConsentAuditRecord[]>;
-  init(metadata?: { assistantId?: string; version?: string; displayName?: string }): Promise<void>;
+  }): Promise<ConsentHistoryEntry[]>;
+  listRegistrations(filter?: {
+    origin?: string;
+    cmpId?: string;
+  }): Promise<InterfaceRegistration[]>;
+  registerAssistant(metadata: AssistantMetadata): Promise<{ assistantId: string }>;
 
   getRegulations(): Promise<RegulationInfo>;
   setRegulations(options: {

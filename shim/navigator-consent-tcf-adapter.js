@@ -275,8 +275,11 @@
         prompt: "This site uses cookies and similar technologies",
         regulation: "gdpr",
         jurisdiction: "eu",
-        versionIdentifier: "tcf-v" + (tcData.cmpVersion || "2"),
-        cmpId: "tcf-" + cmpId
+        cmp: {
+          id: "tcf-" + cmpId,
+          version: "tcf-v" + (tcData.cmpVersion || "2"),
+          frameworks: ["tcf-v2.2"]
+        }
       }).then(function (result) {
         registrationId = result.registrationId;
 

@@ -67,14 +67,15 @@
 
       <section>
         <h2>Privacy Assistant side</h2>
-        <button id="init">init()</button>
+        <button id="register-assistant">registerAssistant()</button>
         <button id="get-vendors">getVendors()</button>
         <button id="get-purposes">getPurposes()</button>
+        <button id="list-registrations">listRegistrations()</button>
         <button id="assistant-update">updatePreferences() from assistant</button>
         <button id="hide">hide()</button>
         <button id="show">show()</button>
         <button id="assistant-withdraw">withdraw()</button>
-        <button id="audit">audit()</button>
+        <button id="get-history">getHistory()</button>
       </section>
     </div>
 
@@ -106,7 +107,7 @@
             });
         }
 
-        ["update", "hide", "show", "withdraw", "audit", "init"].forEach(function (type) {
+        ["update", "hide", "show", "withdraw", "query", "registerassistant"].forEach(function (type) {
           navigator.consent.addEventListener(type, function (event) {
             log("event:" + type, event);
           });
@@ -120,8 +121,12 @@
               legalBasis: ["consent"],
               regulation: "gdpr",
               jurisdiction: "eu",
-              versionIdentifier: "demo-v1",
-              cmpId: "axeptio-demo"
+              cmp: {
+                id: "axeptio-demo",
+                version: "demo-v1",
+                displayName: "Axeptio Demo",
+                language: "en"
+              }
             })
             .then(function (result) {
               registrationId = result.registrationId;
@@ -216,19 +221,19 @@
             });
         });
 
-        document.getElementById("init").addEventListener("click", function () {
+        document.getElementById("register-assistant").addEventListener("click", function () {
           asAssistant(function () {
-            return navigator.consent.init({
-              assistantId: "demo-assistant",
+            return navigator.consent.registerAssistant({
+              vendor: "demo-assistant",
               version: "1.0.0",
               displayName: "Demo Assistant"
             });
           })
-            .then(function () {
-              log("init()", { ok: true });
+            .then(function (result) {
+              log("registerAssistant()", result);
             })
             .catch(function (error) {
-              log("init() error", { name: error.name, code: error.code, message: error.message });
+              log("registerAssistant() error", { name: error.name, code: error.code, message: error.message });
             });
         });
 
@@ -314,15 +319,27 @@
             });
         });
 
-        document.getElementById("audit").addEventListener("click", function () {
+        document.getElementById("get-history").addEventListener("click", function () {
           asAssistant(function () {
-            return navigator.consent.audit({ registrationId: registrationId, limit: 100 });
+            return navigator.consent.getHistory({ registrationId: registrationId, limit: 100 });
           })
-            .then(function (records) {
-              log("audit()", records);
+            .then(function (entries) {
+              log("getHistory()", entries);
             })
             .catch(function (error) {
-              log("audit() error", { name: error.name, code: error.code, message: error.message });
+              log("getHistory() error", { name: error.name, code: error.code, message: error.message });
+            });
+        });
+
+        document.getElementById("list-registrations").addEventListener("click", function () {
+          asAssistant(function () {
+            return navigator.consent.listRegistrations();
+          })
+            .then(function (registrations) {
+              log("listRegistrations()", registrations);
+            })
+            .catch(function (error) {
+              log("listRegistrations() error", { name: error.name, code: error.code, message: error.message });
             });
         });
 

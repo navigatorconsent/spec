@@ -9,7 +9,7 @@
     return;
   }
 
-  var EVENT_TYPES = ["update", "hide", "show", "withdraw", "audit", "init", "regulation_change", "consent_request"];
+  var EVENT_TYPES = ["update", "hide", "show", "withdraw", "query", "registerassistant", "regulation_change", "consent_request"];
   var DECISIONS = ["grant", "deny", "unset"];
   var LEGAL_BASIS = ["consent", "legitimate_interest"];
   var LIMITS = {
@@ -23,8 +23,9 @@
     MAX_TEXT_LENGTH: 512,
     MAX_LONG_TEXT_LENGTH: 4096,
     MAX_REASON_LENGTH: 512,
-    MAX_AUDIT_RECORDS: 5000,
-    MAX_AUDIT_QUERY_LIMIT: 500,
+    MAX_HISTORY_ENTRIES: 5000,
+    MAX_HISTORY_QUERY_LIMIT: 500,
+    MAX_FRAMEWORKS_PER_PAYLOAD: 16,
     RATE_WINDOW_MS: 10000,
     MAX_MUTATIONS_PER_WINDOW_PER_FRAME: 120,
     MAX_MUTATIONS_PER_WINDOW_PER_REGISTRATION: 60
@@ -34,7 +35,9 @@
     sequence: 0,
     registrations: new Map(),
     cmpIdToRegistrationId: new Map(),
-    audit: [],
+    catalogChecksums: new Map(),
+    assistants: new Map(),
+    history: [],
     listeners: new Map(),
     rateBuckets: new Map(),
     defaultRegistrationId: null,
@@ -148,17 +151,17 @@
       details: details
     };
 
-    pushAuditRecord({
+    pushHistoryEntry({
       recordId: "rec_" + (++state.sequence),
       timestamp: nowIso(),
-      type: "audit",
+      type: "query",
       registrationId: registrationId,
       domain: domain,
       source: source,
       warning: warning
     });
 
-    emit("audit", warning, source, registrationId, domain);
+    emit("query", warning, source, registrationId, domain);
   }
 
   function raiseAntiSpamError(errorName, reasonCode, message, controlCategory, extraDetails, context) {
@@ -373,6 +376,30 @@
     });
   }
 
+  function validateFrameworksArray(value, fieldName, context) {
+    if (value === undefined) {
+      return;
+    }
+    if (!Array.isArray(value)) {
+      throw createError(
+        "ValidationError",
+        "INVALID_FRAMEWORKS",
+        fieldName + " must be an array when provided."
+      );
+    }
+    enforceArraySize(value, fieldName, LIMITS.MAX_FRAMEWORKS_PER_PAYLOAD, context);
+    value.forEach(function (item) {
+      if (typeof item !== "string" || item.length === 0) {
+        throw createError(
+          "ValidationError",
+          "INVALID_FRAMEWORKS",
+          fieldName + " values must be non-empty strings."
+        );
+      }
+      enforceStringLength(item, fieldName + "[]", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+    });
+  }
+
   function isExtensionContext() {
     if (global.__navigatorConsentExtensionContext === true) {
       return true;
@@ -536,14 +563,46 @@
     };
   }
 
-  function pushAuditRecord(record) {
+  function buildRegistrationView(registration) {
+    var view = {
+      vendor: registration.metadata.vendor,
+      cmp: cloneCmpMetadata(registration.metadata.cmp)
+    };
+    if (registration.metadata.prompt !== undefined) view.prompt = registration.metadata.prompt;
+    if (registration.metadata.regulation !== undefined) view.regulation = registration.metadata.regulation;
+    if (registration.metadata.jurisdiction !== undefined) view.jurisdiction = registration.metadata.jurisdiction;
+    if (registration.catalogChecksum !== undefined) view.catalogChecksum = registration.catalogChecksum;
+    return view;
+  }
+
+  function cloneCmpMetadata(cmp) {
+    if (!isObject(cmp)) {
+      return undefined;
+    }
+    var result = {};
+    if (cmp.id !== undefined) result.id = cmp.id;
+    if (cmp.version !== undefined) result.version = cmp.version;
+    if (cmp.sdkVersion !== undefined) result.sdkVersion = cmp.sdkVersion;
+    if (cmp.configVersion !== undefined) result.configVersion = cmp.configVersion;
+    if (cmp.language !== undefined) result.language = cmp.language;
+    if (cmp.displayName !== undefined) result.displayName = cmp.displayName;
+    if (Array.isArray(cmp.frameworks)) result.frameworks = cmp.frameworks.slice();
+    return result;
+  }
+
+  function buildChecksumKey(topLevelOrigin, cmpId, vendor) {
+    var scope = cmpId && cmpId.length ? "cmp:" + cmpId : "vendor:" + vendor;
+    return topLevelOrigin + "|" + scope;
+  }
+
+  function pushHistoryEntry(entry) {
     var provenance = buildProvenance();
-    record.topLevelOrigin = provenance.topLevelOrigin;
-    record.frameOrigin = provenance.frameOrigin;
-    record.scriptOrigin = provenance.scriptOrigin;
-    state.audit.push(record);
-    if (state.audit.length > LIMITS.MAX_AUDIT_RECORDS) {
-      state.audit.splice(0, state.audit.length - LIMITS.MAX_AUDIT_RECORDS);
+    entry.topLevelOrigin = provenance.topLevelOrigin;
+    entry.frameOrigin = provenance.frameOrigin;
+    entry.scriptOrigin = provenance.scriptOrigin;
+    state.history.push(entry);
+    if (state.history.length > LIMITS.MAX_HISTORY_ENTRIES) {
+      state.history.splice(0, state.history.length - LIMITS.MAX_HISTORY_ENTRIES);
     }
   }
 
@@ -569,6 +628,31 @@
     }
 
     return event;
+  }
+
+  function computeAssistantStatus() {
+    return state.assistants.size > 0 ? "present" : "absent";
+  }
+
+  function buildRegulationsForRegistration() {
+    var override = state.regulation.override;
+    var browserDefault = state.regulation.browserDefault;
+
+    if (override) {
+      return {
+        regulations: Array.isArray(override.regulations) ? override.regulations.slice() : [],
+        jurisdiction: override.jurisdiction !== undefined ? override.jurisdiction : null
+      };
+    }
+
+    if (browserDefault) {
+      return {
+        regulations: Array.isArray(browserDefault.regulations) ? browserDefault.regulations.slice() : [],
+        jurisdiction: browserDefault.jurisdiction || null
+      };
+    }
+
+    return { regulations: [], jurisdiction: null };
   }
 
   function updateRegistrationPreferences(registration, update, source, context) {
@@ -612,7 +696,7 @@
       },
       reason: update.reason || undefined
     };
-    pushAuditRecord(record);
+    pushHistoryEntry(record);
 
     if (source === "privacy_assistant") {
       var undeclaredVendorIds = [];
@@ -644,17 +728,17 @@
         };
         warnings.push(warning);
 
-        pushAuditRecord({
+        pushHistoryEntry({
           recordId: "rec_" + (++state.sequence),
           timestamp: nowIso(),
-          type: "audit",
+          type: "query",
           registrationId: registration.registrationId,
           domain: registration.domain,
           source: "privacy_assistant",
           warning: warning
         });
 
-        emit("audit", warning, "privacy_assistant", registration.registrationId, registration.domain);
+        emit("query", warning, "privacy_assistant", registration.registrationId, registration.domain);
       }
     }
 
@@ -685,7 +769,7 @@
     registration.updatedAt = nowIso();
     var snapshot = buildSnapshot(registration);
 
-    pushAuditRecord({
+    pushHistoryEntry({
       recordId: "rec_" + (++state.sequence),
       timestamp: registration.updatedAt,
       type: "withdraw",
@@ -701,6 +785,22 @@
 
     emit(eventType || "withdraw", snapshot, source, registration.registrationId, registration.domain);
     return snapshot;
+  }
+
+  function validateCmpMetadata(cmp, context) {
+    if (!isObject(cmp)) {
+      throw createError("ValidationError", "INVALID_CMP", "registerInterface requires a cmp object.");
+    }
+    if (typeof cmp.version !== "string" || !cmp.version) {
+      throw createError("ValidationError", "INVALID_CMP_VERSION", "cmp.version must be a non-empty string.");
+    }
+    enforceStringLength(cmp.version, "cmp.version", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+    enforceStringLength(cmp.id, "cmp.id", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+    enforceStringLength(cmp.sdkVersion, "cmp.sdkVersion", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+    enforceStringLength(cmp.configVersion, "cmp.configVersion", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+    enforceStringLength(cmp.language, "cmp.language", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+    enforceStringLength(cmp.displayName, "cmp.displayName", LIMITS.MAX_TEXT_LENGTH, context);
+    validateFrameworksArray(cmp.frameworks, "cmp.frameworks", context);
   }
 
   var consentApi = {
@@ -720,19 +820,12 @@
       enforceStringLength(payload.prompt, "prompt", LIMITS.MAX_LONG_TEXT_LENGTH, context);
       enforceStringLength(payload.regulation, "regulation", LIMITS.MAX_IDENTIFIER_LENGTH, context);
       enforceStringLength(payload.jurisdiction, "jurisdiction", LIMITS.MAX_IDENTIFIER_LENGTH, context);
-      enforceStringLength(payload.versionIdentifier, "versionIdentifier", LIMITS.MAX_IDENTIFIER_LENGTH, context);
-      enforceStringLength(payload.cmpId, "cmpId", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+      enforceStringLength(payload.catalogChecksum, "catalogChecksum", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+      validateCmpMetadata(payload.cmp, context);
 
-      if (typeof payload.versionIdentifier !== "string" || !payload.versionIdentifier) {
-        throw createError(
-          "ValidationError",
-          "INVALID_VERSION_IDENTIFIER",
-          "registerInterface requires a non-empty versionIdentifier."
-        );
-      }
-
+      var cmpMetadata = cloneCmpMetadata(payload.cmp);
       var existingRegistrationId =
-        typeof payload.cmpId === "string" && payload.cmpId ? state.cmpIdToRegistrationId.get(payload.cmpId) : null;
+        cmpMetadata.id ? state.cmpIdToRegistrationId.get(cmpMetadata.id) : null;
       var registrationProvenance = enforceRegistrationQuota(existingRegistrationId, source);
       var registrationId = existingRegistrationId || "cmp_" + (++state.sequence);
       var registration = existingRegistrationId ? getRegistrationById(existingRegistrationId) : null;
@@ -758,34 +851,51 @@
         prompt: payload.prompt,
         regulation: payload.regulation,
         jurisdiction: payload.jurisdiction,
-        versionIdentifier: payload.versionIdentifier,
-        cmpId: payload.cmpId
+        cmp: cmpMetadata
       };
       registration.provenance = registrationProvenance;
       registration.updatedAt = nowIso();
 
-      state.registrations.set(registrationId, registration);
-      state.defaultRegistrationId = registrationId;
-      if (registration.metadata.cmpId) {
-        state.cmpIdToRegistrationId.set(registration.metadata.cmpId, registrationId);
+      var checksumKey = buildChecksumKey(registrationProvenance.topLevelOrigin, cmpMetadata.id, payload.vendor);
+      var storedCatalogChecksum = state.catalogChecksums.has(checksumKey)
+        ? state.catalogChecksums.get(checksumKey)
+        : null;
+      if (typeof payload.catalogChecksum === "string" && payload.catalogChecksum.length > 0) {
+        state.catalogChecksums.set(checksumKey, payload.catalogChecksum);
+        registration.catalogChecksum = payload.catalogChecksum;
+      } else {
+        registration.catalogChecksum = undefined;
       }
 
-      pushAuditRecord({
+      state.registrations.set(registrationId, registration);
+      state.defaultRegistrationId = registrationId;
+      if (cmpMetadata.id) {
+        state.cmpIdToRegistrationId.set(cmpMetadata.id, registrationId);
+      }
+
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: registration.updatedAt,
-        type: "audit",
+        type: "query",
         registrationId: registrationId,
         domain: registration.domain,
         source: "cmp",
         declaration: {
           action: "registerInterface",
           vendor: registration.metadata.vendor,
-          versionIdentifier: registration.metadata.versionIdentifier
+          cmp: cloneCmpMetadata(cmpMetadata),
+          catalogChecksum: registration.catalogChecksum
         }
       });
 
+      var regulationsView = buildRegulationsForRegistration();
+
       return Promise.resolve({
-        registrationId: registrationId
+        registrationId: registrationId,
+        storedCatalogChecksum: storedCatalogChecksum,
+        assistantStatus: computeAssistantStatus(),
+        regulations: regulationsView.regulations,
+        jurisdiction: regulationsView.jurisdiction
       });
     },
 
@@ -835,10 +945,10 @@
       });
       registration.updatedAt = nowIso();
 
-      pushAuditRecord({
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: registration.updatedAt,
-        type: "audit",
+        type: "query",
         registrationId: registration.registrationId,
         domain: registration.domain,
         source: "cmp",
@@ -901,10 +1011,10 @@
       });
       registration.updatedAt = nowIso();
 
-      pushAuditRecord({
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: registration.updatedAt,
-        type: "audit",
+        type: "query",
         registrationId: registration.registrationId,
         domain: registration.domain,
         source: "cmp",
@@ -1061,7 +1171,7 @@
       enforceMutationRate("hide", registration, source);
       enforceStringLength(target.reason, "target.reason", LIMITS.MAX_REASON_LENGTH, context);
       emit("hide", target, "privacy_assistant", registrationId, getCurrentDomain());
-      pushAuditRecord({
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: nowIso(),
         type: "hide",
@@ -1092,7 +1202,7 @@
       enforceMutationRate("show", registration, source);
       enforceStringLength(target.reason, "target.reason", LIMITS.MAX_REASON_LENGTH, context);
       emit("show", target, "privacy_assistant", registrationId, getCurrentDomain());
-      pushAuditRecord({
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: nowIso(),
         type: "show",
@@ -1104,27 +1214,27 @@
       return Promise.resolve();
     },
 
-    audit: function audit(query) {
-      assertExtensionContext("audit");
+    getHistory: function getHistory(query) {
+      assertExtensionContext("getHistory");
       if (query === undefined) {
         query = {};
       }
       if (!isObject(query)) {
-        throw createError("ValidationError", "INVALID_QUERY", "audit query must be an object.");
+        throw createError("ValidationError", "INVALID_QUERY", "getHistory query must be an object.");
       }
-      var effectiveLimit = LIMITS.MAX_AUDIT_QUERY_LIMIT;
+      var effectiveLimit = LIMITS.MAX_HISTORY_QUERY_LIMIT;
       if (typeof query.limit === "number" && query.limit >= 0) {
-        effectiveLimit = Math.min(query.limit, LIMITS.MAX_AUDIT_QUERY_LIMIT);
+        effectiveLimit = Math.min(query.limit, LIMITS.MAX_HISTORY_QUERY_LIMIT);
       }
 
-      var filtered = state.audit.filter(function (record) {
-        if (query.registrationId && record.registrationId !== query.registrationId) {
+      var filtered = state.history.filter(function (entry) {
+        if (query.registrationId && entry.registrationId !== query.registrationId) {
           return false;
         }
-        if (query.from && record.timestamp < query.from) {
+        if (query.from && entry.timestamp < query.from) {
           return false;
         }
-        if (query.to && record.timestamp > query.to) {
+        if (query.to && entry.timestamp > query.to) {
           return false;
         }
         return true;
@@ -1132,8 +1242,18 @@
 
       filtered = filtered.slice(0, effectiveLimit);
 
+      pushHistoryEntry({
+        recordId: "rec_" + (++state.sequence),
+        timestamp: nowIso(),
+        type: "query",
+        registrationId: query.registrationId || undefined,
+        domain: getCurrentDomain(),
+        source: "privacy_assistant",
+        query: { from: query.from, to: query.to, limit: effectiveLimit, count: filtered.length }
+      });
+
       emit(
-        "audit",
+        "query",
         { query: query, count: filtered.length, effectiveLimit: effectiveLimit },
         "privacy_assistant",
         query.registrationId,
@@ -1142,26 +1262,76 @@
       return Promise.resolve(filtered);
     },
 
-    init: function init(metadata) {
-      assertExtensionContext("init");
-      metadata = isObject(metadata) ? metadata : {};
+    listRegistrations: function listRegistrations(filter) {
+      assertExtensionContext("listRegistrations");
+      filter = filter || {};
+      if (!isObject(filter)) {
+        throw createError("ValidationError", "INVALID_FILTER", "listRegistrations filter must be an object.");
+      }
+      var result = [];
+      state.registrations.forEach(function (registration) {
+        if (filter.cmpId) {
+          var cmpId = registration.metadata && registration.metadata.cmp && registration.metadata.cmp.id;
+          if (cmpId !== filter.cmpId) {
+            return;
+          }
+        }
+        if (filter.origin) {
+          var topLevelOrigin = registration.provenance && registration.provenance.topLevelOrigin;
+          if (topLevelOrigin !== filter.origin) {
+            return;
+          }
+        }
+        result.push(buildRegistrationView(registration));
+      });
+      return Promise.resolve(result);
+    },
+
+    registerAssistant: function registerAssistant(metadata) {
+      assertExtensionContext("registerAssistant");
+      if (!isObject(metadata)) {
+        throw createError("ValidationError", "INVALID_METADATA", "registerAssistant requires a metadata object.");
+      }
+      if (typeof metadata.vendor !== "string" || !metadata.vendor) {
+        throw createError("ValidationError", "INVALID_VENDOR", "registerAssistant requires a non-empty vendor.");
+      }
+      if (typeof metadata.version !== "string" || !metadata.version) {
+        throw createError("ValidationError", "INVALID_VERSION", "registerAssistant requires a non-empty version.");
+      }
       var source = "privacy_assistant";
-      var context = {
-        source: source
-      };
-      enforceMutationRate("init", null, source);
-      enforceStringLength(metadata.assistantId, "metadata.assistantId", LIMITS.MAX_IDENTIFIER_LENGTH, context);
+      var context = { source: source };
+      enforceMutationRate("registerAssistant", null, source);
+      enforceStringLength(metadata.vendor, "metadata.vendor", LIMITS.MAX_TEXT_LENGTH, context);
       enforceStringLength(metadata.version, "metadata.version", LIMITS.MAX_IDENTIFIER_LENGTH, context);
       enforceStringLength(metadata.displayName, "metadata.displayName", LIMITS.MAX_TEXT_LENGTH, context);
-      emit("init", metadata, "privacy_assistant", null, getCurrentDomain());
-      pushAuditRecord({
+      validateFrameworksArray(metadata.frameworks, "metadata.frameworks", context);
+
+      var existing = null;
+      state.assistants.forEach(function (entry, id) {
+        if (!existing && entry.vendor === metadata.vendor) {
+          existing = id;
+        }
+      });
+      var assistantId = existing || "asst_" + (++state.sequence);
+      var stored = {
+        vendor: metadata.vendor,
+        version: metadata.version
+      };
+      if (metadata.displayName !== undefined) stored.displayName = metadata.displayName;
+      if (Array.isArray(metadata.frameworks)) stored.frameworks = metadata.frameworks.slice();
+      state.assistants.set(assistantId, stored);
+
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: nowIso(),
-        type: "init",
+        type: "registerassistant",
         domain: getCurrentDomain(),
-        source: "privacy_assistant"
+        source: source,
+        assistantId: assistantId
       });
-      return Promise.resolve();
+
+      emit("registerassistant", { assistantId: assistantId, metadata: stored }, source, null, getCurrentDomain());
+      return Promise.resolve({ assistantId: assistantId });
     },
 
     getRegulations: function getRegulations() {
@@ -1263,7 +1433,7 @@
         result.source = "browser";
       }
 
-      pushAuditRecord({
+      pushHistoryEntry({
         recordId: "rec_" + (++state.sequence),
         timestamp: nowIso(),
         type: "regulation_change",
