@@ -214,13 +214,22 @@ Notes:
 #### 6.4.1 `navigator.consent.registerInterface()`
 
 ```ts
-registerInterface(payload: InterfaceRegistration): Promise<{ registrationId: string }>
+registerInterface(payload: InterfaceRegistration): Promise<{
+  registrationId: string;
+  storedCatalogChecksum: string | null;
+  assistantStatus: "absent" | "present";
+  regulations: string[];
+  jurisdiction: string | null;
+}>
 ```
 
 Behavior:
 
 - Registers a consent interface declaration for the current page context.
 - Browser returns `registrationId`, which identifies subsequent metadata and preference operations.
+- Browser returns `storedCatalogChecksum`: the previously-stored opaque value for this `cmp.id` and origin (see Section 6.3 `InterfaceRegistration.catalogChecksum`), or `null` if none is stored. CMPs MAY compare it to their locally computed checksum and skip subsequent `registerVendors()` and `registerPurposes()` calls on match.
+- Browser returns `assistantStatus`: `"present"` if at least one Privacy Assistant has called `registerAssistant()` for the current page context, otherwise `"absent"`. Browser MUST NOT disclose how many assistants are present.
+- Browser returns `regulations` and `jurisdiction` mirroring the corresponding fields of `RegulationInfo` (Section 6.7.1) so CMPs do not need a follow-up `getRegulations()` call for the common case. The richer fields (`source`, `browserDefault`) are not duplicated; CMPs that need them MUST call `getRegulations()`.
 - `registrationId` identifies a coordination boundary and is not a normative declaration of CMP storage scope policy.
 - Registration ownership is bound to runtime context provenance.
 - Registration is intentionally open and MUST NOT depend on browser-side trust attestation or allow-lists.
