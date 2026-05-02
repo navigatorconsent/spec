@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://navigator-consent.spec/schemas/consent-record.schema.json",
-  "title": "ConsentAuditRecord",
+  "title": "ConsentHistoryEntry",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -25,8 +25,8 @@
         "hide",
         "show",
         "withdraw",
-        "audit",
-        "init",
+        "query",
+        "registerassistant",
         "regulation_change"
       ]
     },

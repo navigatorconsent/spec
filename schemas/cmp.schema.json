@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "vendor",
-    "versionIdentifier"
+    "cmp"
   ],
   "properties": {
     "vendor": {
@@ -23,11 +23,47 @@
     "jurisdiction": {
       "type": "string"
     },
-    "versionIdentifier": {
-      "type": "string",
-      "minLength": 1
+    "cmp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sdkVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     },
-    "cmpId": {
+    "catalogChecksum": {
       "type": "string",
       "minLength": 1
     }

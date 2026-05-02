@@ -16,8 +16,8 @@
         "hide",
         "show",
         "withdraw",
-        "audit",
-        "init",
+        "query",
+        "registerassistant",
         "regulation_change",
         "consent_request"
       ]
