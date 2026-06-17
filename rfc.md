@@ -62,7 +62,7 @@ A browser extension context authorized to invoke assistant-only API methods.
 
 ## 4. Regulatory Context (Informative)
 
-This RFC is technical and neutral. It is designed to remain useful across jurisdictions. Current EU policy discussion includes the Digital Omnibus proposal (COM(2025)0837), which is proposal-stage and not final law. References to proposal-stage policy in this document are informative and must not be interpreted as adopted legal requirements. Detailed advocacy and policy-mapping materials are maintained separately from this RFC (for example `digital-omnibus-position-paper.md` and `site/policy.html`).
+This RFC is technical and neutral. It is designed to remain useful across jurisdictions. Detailed advocacy and policy-mapping materials are maintained separately from this RFC (for example `digital-omnibus-position-paper.md` and `site/policy.html`).
 
 ## 5. Architecture Overview
 
